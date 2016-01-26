@@ -1,5 +1,5 @@
 '
-' Cisco UCCX Wallboard 3.2
+' Cisco UCCX Wallboard 3.3
 ' Copyright (c) 2009 by Antoni Sawicki <as@tenoware.com>
 '
 
@@ -13,6 +13,7 @@ declare sub ShowCursor lib "user32" (bShow as long)
 declare function GetSystemMetrics lib "user32" (nIndex as long) as long
 
 dim db as sqldata
+dim db2 as sqldata
 dim d as date
 deflng ret
 defstr cfg,f1,f2,t
@@ -28,7 +29,7 @@ defint showmousecursor=false
 defint showdsn=false
 defint w,h, w4, h9
 defint n, dummy, inblink
-defint wt,wtnew,cw,lc,ar,al,at,tc
+defint wt,wtnew,cw,lc,ar,al,ta
 defstr wt3, wt3new, stbc
 defint pfs=0
 defint tfs=0
@@ -46,7 +47,7 @@ defstr pnlfont="Arial Narrow"
 defstr ttlfont="Arial Narrow"
 deflng sock, res 
 defint HTTPPORT
-defstr buff, direct_calls, HTTPCMD, HTTPHOST, HTTPFILE
+defstr buff, inbound_calls, outbound_calls, HTTPCMD, HTTPHOST, HTTPFILE
 dim time0 as REAL10
 dim peer as SOCKET
 
@@ -125,7 +126,7 @@ else
   SQLQNAME=QNAME
 end if
 
-QUERYCMD="select callsWaiting,convOldestContact,availableAgents,loggedInAgents,talkingAgents,callsAbandoned,totalCalls,OldestContact" + _
+QUERYCMD="select callsWaiting,convOldestContact,availableAgents,talkingAgents,callsAbandoned,OldestContact" + _
          " from RtCSQsSummary where CSQName like '" + SQLQNAME + "';")
 
 HTTPCMD="GET " + HTTPFILE + " HTTP/1.0" + CRLF
@@ -148,7 +149,7 @@ end if
 create b as splash
   width=200:height=50:center:caption=" UCCX Wallboard Loader":onkeydown=cleanup
   create msg as label
-    top=0:left=10:width=b.width:height=b.height:caption="UCCX Wallboard 3.2: Trying " + ODBC_DSN1 + "..."
+    top=0:left=10:width=b.width:height=b.height:caption="UCCX Wallboard 3.3: Trying " + ODBC_DSN1 + "..."
   end create
 end create
 b.show
@@ -229,7 +230,7 @@ create f as splash
     color=statbgcolor:textcolor=statfgcolor
     font=titlefont:style=statbar.style or &H1
     onmouseup=cleanup
-    caption=ORG + " Wallboard 3.2"
+    caption=ORG + " Wallboard 3.3"
   end create
 
   '
@@ -294,45 +295,45 @@ create f as splash
     caption="??"
   end create
 
-  create al1 as label
+  create ta1 as label
     top=5*h9:left=w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=al1.style or &H1
-    caption="Online Agents"
-  end create
-
-  create al2 as label
-    top=6*h9:left=w4:width=w4-spc:height=(3*h9)-spc
-    color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=al2.style or &H1
-    caption="??"
-  end create
-
-  create at1 as label
-    top=5*h9:left=2*w4:width=w4-spc:height=h9-spc
-    color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=at1.style or &H1
+    font=titlefont:style=ta1.style or &H1
     caption="Talking Agents"
   end create
 
-  create at2 as label
-    top=6*h9:left=2*w4:width=w4-spc:height=(3*h9)-spc
+  create ta2 as label
+    top=6*h9:left=w4:width=w4-spc:height=(3*h9)-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=at2.style or &H1
+    font=bigfont:style=ta2.style or &H1
     caption="??"
   end create
 
-  create tc1 as label
-    top=5*h9:left=3*w4:width=w4-spc:height=h9-spc
+  create oc1 as label
+    top=5*h9:left=2*w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=tc1.style or &H1
-    caption="Total Calls"
+    font=titlefont:style=oc1.style or &H1
+    caption="Outbound Calls"
   end create
 
-  create tc2 as label
+  create oc2 as label
+    top=6*h9:left=2*w4:width=w4-spc:height=(3*h9)-spc
+    color=labelbgcolor:textcolor=labelfgcolor
+    font=bigfont:style=oc2.style or &H1
+    caption="??"
+  end create
+
+  create ic1 as label
+    top=5*h9:left=3*w4:width=w4-spc:height=h9-spc
+    color=labelbgcolor:textcolor=labelfgcolor
+    font=titlefont:style=ic1.style or &H1
+    caption="Inbound Calls"
+  end create
+
+  create ic2 as label
     top=6*h9:left=3*w4:width=w4-spc:height=(3*h9)-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=tc2.style or &H1
+    font=bigfont:style=ic2.style or &H1
     caption="??"
   end create
 
@@ -382,7 +383,7 @@ sub DoStuff
     goto cleanup
   end if
   
-  if db.fieldcount<>8 then 
+  if db.fieldcount<>6 then 
     showmessage "ODBC query returned wrong number of columns"
     goto cleanup
   end if
@@ -396,11 +397,9 @@ sub DoStuff
   cw=VAL(db.rowvalue(1,1))
   wt3=right$(db.rowvalue(2,1),5)
   ar=VAL(db.rowvalue(3,1))
-  al=VAL(db.rowvalue(4,1))
-  at=VAL(db.rowvalue(5,1))
-  lc=VAL(db.rowvalue(6,1))
-  tc=VAL(db.rowvalue(7,1))
-  wt=VAL(db.rowvalue(8,1))
+  ta=VAL(db.rowvalue(4,1))
+  lc=VAL(db.rowvalue(5,1))
+  wt=val(db.rowvalue(6,1))
   wtnew=0
   wt3new=""
 
@@ -410,10 +409,8 @@ sub DoStuff
     wt3new=right$(db.rowvalue(2,1),5)    
     dummy=VAL(db.rowvalue(3,1))
     dummy=VAL(db.rowvalue(4,1))
-    dummy=VAL(db.rowvalue(5,1))
-    lc=lc+VAL(db.rowvalue(6,1))
-    tc=tc+VAL(db.rowvalue(7,1)) 
-    wtnew=VAL(db.rowvalue(8,1))
+    lc=lc+VAL(db.rowvalue(5,1))
+    wtnew=VAL(db.rowvalue(6,1))
     if wtnew > wt then 
       wt=wtnew
       wt3=wt3new
@@ -432,9 +429,8 @@ sub DoStuff
         sleep 0.1
         if peer.isserverready(sock) then
           buff=peer.read(sock,1024)
-          ' if you change this, also change 1 2 3 4 5 etc
-          direct_calls=field$(buff.item(buff.itemcount), ",", 2)
-          'print "direct_calls=[" + direct_calls + "]"
+          inbound_calls=field$(buff.item(buff.itemcount), ",", 2)
+          outbound_calls=field$(buff.item(buff.itemcount), ",", 3)
          exit while
         end if
       end while
@@ -450,18 +446,28 @@ sub DoStuff
   if str$(cw) <> cw2.caption then cw2.caption=str$(cw)
   if wt3 <> wt2.caption then wt2.caption=wt3
   if str$(ar) <> ar2.caption then ar2.caption=str$(ar)
-  if str$(al) <> al2.caption then al2.caption=str$(al)
-  if str$(at) <> at2.caption then at2.caption=str$(at)
+'  if str$(al) <> al2.caption then al2.caption=str$(al) not used
+  if str$(ta) <> ta2.caption then ta2.caption=str$(ta)
   if str$(lc) <> lc2.caption then lc2.caption=str$(lc)
 
-  if direct_calls <> tc2.caption then 
-    tc2.caption=direct_calls
-    if len(tc2.caption) > 2 then 
-      tc2.font=notbigfont
+  if inbound_calls <> ic2.caption then 
+    ic2.caption=inbound_calls
+    if len(ic2.caption) > 2 then 
+      ic2.font=notbigfont
     else 
-      tc2.font=bigfont
+      ic2.font=bigfont
     end if
   end if
+
+  if outbound_calls <> oc2.caption then 
+    oc2.caption=outbound_calls
+    if len(oc2.caption) > 2 then 
+      oc2.font=notbigfont
+    else 
+      oc2.font=bigfont
+    end if
+  end if
+
 
   if wakeupat<>0 and sleepat<>0 and wakeupat<>sleepat then
     d.update
@@ -510,7 +516,7 @@ ret=sendmessage(65535,274,61808,-1)
 db.close
 app.terminate
 
-PROP.FILEVERSION 3,2,0,0
+PROP.FILEVERSION 3,3,0,0
 PROP.PRODUCTVERSION 0,0,0,0
 PROP.FILEFLAGSMASK 0x0000003FL
 PROP.FILEFLAGS 0x0000000BL
@@ -523,7 +529,7 @@ PROP.BEGIN
 PROP.BLOCK "040904E4"
 PROP.BEGIN
 PROP.VALUE "Author","Antoni Sawicki"
-PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 3.2"
+PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 3.3"
 PROP.VALUE "FileVersion", "3.2.0.0" 
 PROP.END  
 PROP.END  
