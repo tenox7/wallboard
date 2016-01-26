@@ -1,6 +1,6 @@
 '
 ' Cisco UCCX Wallboard 3.5
-' Copyright (c) 2009 by Antoni Sawicki <as@tenoware.com>
+' Copyright (c) 2009-2011 by Antoni Sawicki <as@tenoware.com>
 '
 
 $APPTYPE GUI
@@ -10,13 +10,13 @@ $RESOURCE 0 as "icon.ico"
 declare sub db1_worker() std
 declare sub db2_worker() std
 declare sub http_worker() std
-declare sub screen_paint() std
+'declare sub screen_paint() std
 declare sub DoBlink()
 declare sub keypress
 declare sub ShowCursor lib "user32" (bShow as long)
 declare sub logevent(myevent as string)
 declare function GetSystemMetrics lib "user32" (nIndex as long) as long
-
+declare function tval std (lpstr as long) as long
 
 dim db1 as sqldata
 dim db2 as sqldata
@@ -36,16 +36,15 @@ defint xres=GetSystemMetrics(0)
 defint yres=GetSystemMetrics(1)
 defint xpos,ypos
 defint spc=1
+defint fclose=0
 defint showmousecursor=false
 defint showdsn=false
 defint w,h, w4, h9
-defint n, dummy, inblink
-defint wt,wtnew,cw,lc,ar,al,ta
-defstr wt_str, wt_strnew, stbc
+defint n, inblink
+defint wt,wtnew,cw,lc,al
+defstr wt_str, wt_strnew, stbc, ar, ta, dummy
 defint pfs=0
 defint tfs=0
-defint sleepat=0
-defint wakeupat=0
 defint sla_waitqueue=0
 defint sla_waittime=0
 defint spacercolor=&HFFFFFF
@@ -89,8 +88,6 @@ for n=0 to cfg.itemcount
     case "showdsn": if f2="yes" then showdsn=true
     case "panel_font": if len(f2) > 1 then pnlfont=f2
     case "title_font": if len(f2) > 1 then ttlfont=f2
-    case "sleep_hour": if VAL(f2) > 0 then sleepat=VAL(f2)
-    case "wakeup_hour": if VAL(f2) > 0 then wakeupat=VAL(f2)
     case "sla_waitqueue": if VAL(f2) > 0 then sla_waitqueue=VAL(f2)
     case "sla_waittime": if VAL(f2) > 0 then sla_waittime=VAL(f2)
     case "panel_fontsize": if VAL(f2) > 0 then pfs=VAL(f2)
@@ -355,7 +352,7 @@ if xpos>0 and ypos>0 then
 else
   f.center
 end if
-ret=createthread(codeptr(screen_paint),0)
+'ret=createthread(codeptr(screen_paint),0)
 ret=createthread(codeptr(http_worker),0)
 ret=createthread(codeptr(db1_worker),0)
 if len(ODBC_DSN2) > 1 then
@@ -363,158 +360,11 @@ if len(ODBC_DSN2) > 1 then
   ret=createthread(codeptr(db2_worker),0)
 end if
 logevent(hex$(f.exstyle))
-f.showmodal
-
-sub db1_worker()
-  defdword db1_time=0
-  do
-    db1.command(QUERYCMD)
-
-    if db1.error=0 and db1.fieldcount=7 and db1.row<>100 then
-      db1_time=VAL(db1.rowvalue(1,1))
-      begin thread
-        logevent("DB_1: OK Time=" + str$(db1_time) + " err=" + str$(db1.error))
-      end thread
-
-      ' update values if current server has latest data (thread safe)
-      if db1_time > last_update then
-        begin thread
-          logevent("DB_1: Updating values... new=" + str$(db1_time) + " old=" + str$(last_update))
-          last_update=db1_time
-          last_update_str=left$(TIME$, 5)
-          DSNUSED=ODBC_DSN1
-          cw=VAL(db1.rowvalue(2,1))
-          wt_str=right$(db1.rowvalue(3,1),5)
-          ar=VAL(db1.rowvalue(4,1))
-          ta=VAL(db1.rowvalue(5,1))
-          lc=VAL(db1.rowvalue(6,1))
-          wt=VAL(db1.rowvalue(7,1))
-          wtnew=0
-          wt_strnew=""
-
-          ' if multiqueue there should be more data!
-          while db1.row<>100
-            cw=cw+VAL(db1.rowvalue(2,1))
-            wt_strnew=right$(db1.rowvalue(3,1),5)    
-            dummy=VAL(db1.rowvalue(4,1))
-            dummy=VAL(db1.rowvalue(5,1))
-            lc=lc+VAL(db1.rowvalue(6,1))
-            wtnew=VAL(db1.rowvalue(7,1))
-            if wtnew > wt then 
-              wt=wtnew
-              wt_str=wt_strnew
-            end if
-          end while
-        end thread
-      end if
-    else
-      begin thread
-        logevent("DB_1: Reconnecting... err=" + str$(db1.error))
-      end thread
-      'db1.freememory
-      'db1.close
-      db1.connect(ODBC_DSN1,ODBC_USERNAME,ODBC_PASSWORD)
-    end if
-
-    db1.freememory
-    doevents
-    sleep ivl
-  loop
-end sub
-
-sub db2_worker()
-  defdword db2_time=0
-  do
-    db2.command(QUERYCMD)
-
-    if db2.error=0 and db2.fieldcount=7 and db2.row<>100 then
-      db2_time=VAL(db2.rowvalue(1,1))
-      begin thread
-        logevent("DB_2: OK Time=" + str$(db2_time) + " err=" + str$(db2.error))
-      end thread
-
-      ' update values if current server has latest data (thread safe)
-      if db2_time > last_update then
-        begin thread
-          logevent("DB_2: Updating values... new=" + str$(db2_time) + " old=" + str$(last_update))
-          last_update=db2_time
-          last_update_str=left$(TIME$, 5)
-          DSNUSED=ODBC_DSN2
-          cw=VAL(db2.rowvalue(2,1))
-          wt_str=right$(db2.rowvalue(3,1),5)
-          ar=VAL(db2.rowvalue(4,1))
-          ta=VAL(db2.rowvalue(5,1))
-          lc=VAL(db2.rowvalue(6,1))
-          wt=VAL(db2.rowvalue(7,1))
-          wtnew=0
-          wt_strnew=""
-
-          ' if multiqueue there should be more data!
-          while db2.row<>100
-            cw=cw+VAL(db2.rowvalue(2,1))
-            wt_strnew=right$(db2.rowvalue(3,1),5)    
-            dummy=VAL(db2.rowvalue(4,1))
-            dummy=VAL(db2.rowvalue(5,1))
-            lc=lc+VAL(db2.rowvalue(6,1))
-            wtnew=VAL(db2.rowvalue(7,1))
-            if wtnew > wt then 
-              wt=wtnew
-              wt_str=wt_strnew
-            end if
-          end while
-        end thread
-      end if
-    else
-      begin thread
-        logevent("DB_2: Reconnecting... err=" + str$(db2.error))
-      end thread
-      'db2.freememory
-      'db2.close
-      db2.connect(ODBC_DSN2,ODBC_USERNAME,ODBC_PASSWORD)
-    end if
-
-    db2.freememory
-    doevents
-    sleep ivl
-  loop
-end sub
-
-sub http_worker()
-  do
-    sock=peer.s
-    if sock>=0 then 
-      res=peer.connect(sock,HTTPHOST,HTTPPORT)
-      if res>=0 then
-        res=peer.writeline(sock,HTTPCMD)
-        time0=timer
-        while timer-time0<3 
-          'print timer-time0
-          sleep 0.1
-          if peer.isserverready(sock) then
-            buff=peer.read(sock,1024)
-            begin thread
-              inbound_calls=field$(buff.item(buff.itemcount), ",", 2)
-              outbound_calls=field$(buff.item(buff.itemcount), ",", 3)
-              logevent("HTTP: ic=" + inbound_calls + " oc=" + outbound_calls)
-            end thread
-           exit while
-          end if
-        end while
-      end if
-    end if
-    res=peer.shutdown(sock,2)
-    res=peer.close(sock)
-    doevents
-    sleep ivl
-  loop
-end sub
-
-sub screen_paint()
-  do
-    sleep ivl
-    begin thread
-    logevent("SCRN: DSN="+DSNUSED+" WQ="+str$(cw)+" WT="+wt_str+" AR="+str$(ar)+ _
-             " AT="+str$(ta)+" IC="+inbound_calls+" OC="+outbound_calls+" LC="+str$(lc))
+f.show
+do
+'  begin thread
+'    logevent("SCRN: DSN="+DSNUSED+" WQ="+str$(cw)+" WT="+wt_str+" AR="+str$(ar)+ _
+'             " AT="+str$(ta)+" IC="+inbound_calls+" OC="+outbound_calls+" LC="+str$(lc))
     if showdsn=true then
       stbc=ORG + "  " + QNAME + "  " + left$(last_update_str, 5) + "  " + DSNUSED
     else
@@ -524,10 +374,10 @@ sub screen_paint()
    ' update only on a change to prevent flicker
     if stbc <> statbar.caption then statbar.caption=stbc
     if str$(cw) <> pc_a.caption then pc_a.caption=str$(cw)
-    if wt_str <> pc_b.caption then pc_b.caption=wt_str
-    if str$(ar) <> pc_d.caption then pc_d.caption=str$(ar)
+    if wt_str <> pc_b.caption then pc_b.caption=right$(wt_str,5)
+    if ar <> pc_d.caption then pc_d.caption=ar
   '  if str$(al) <> al2.caption then al2.caption=str$(al) not used
-    if str$(ta) <> pc_e.caption then pc_e.caption=str$(ta)
+    if ta <> pc_e.caption then pc_e.caption=ta
     if str$(lc) <> pc_c.caption then pc_c.caption=str$(lc)
 
     if inbound_calls <> pc_g.caption then 
@@ -548,18 +398,152 @@ sub screen_paint()
       end if
     end if
 
+'  end thread
+  doevents
+  sleep 0.5
+loop
 
-    if wakeupat<>0 and sleepat<>0 and wakeupat<>sleepat then
-      d.update
-      if d.hour=wakeupat and d.minute=0 then ret=sendmessage(65535,274,61808,-1) 
-      if d.hour=sleepat and d.minute=0 then  ret=sendmessage(65535,274,61808,2)  
+cleanup:
+  fclose=1
+  logevent("Cleanup invoked, exiting...")
+  if logfile.handle then: logfile.close: end if
+  app.terminate
+end
+
+
+sub db1_worker()
+  defdword db1_time=0
+  defstr cline
+  do
+    if fclose=1 then exit sub
+
+    db1.command(QUERYCMD)
+
+    if db1.error=0 and db1.fieldcount=7 and db1.row<>100 then
+      cline=db1.rowvalue(1,1): db1_time=tval(@cline)
+      logevent("DB_1: OK Time=" + str$(db1_time) + " err=" + str$(db1.error))
+
+      if db1_time > last_update then
+          logevent("DB_1: Updating values... new=" + str$(db1_time) + " old=" + str$(last_update))
+          last_update=db1_time
+          last_update_str=left$(TIME$, 5)
+          DSNUSED=ODBC_DSN1
+          cline=db1.rowvalue(2,1): cw=tval(@cline)
+          wt_str=db1.rowvalue(3,1) 
+          ar=db1.rowvalue(4,1)
+          ta=db1.rowvalue(5,1)
+          cline=db1.rowvalue(6,1): lc=tval(@cline)
+          cline=db1.rowvalue(7,1): wt=tval(@cline)
+          wtnew=0
+          wt_strnew=""
+
+          ' if multiqueue there should be more data!
+          while db1.row<>100
+            cline=db1.rowvalue(2,1): cw=cw+tval(@cline)
+            wt_strnew=db1.rowvalue(3,1)
+            dummy=db1.rowvalue(4,1)
+            dummy=db1.rowvalue(5,1)
+            cline=db1.rowvalue(6,1): lc=lc+tval(@cline)
+            cline=db1.rowvalue(7,1): wtnew=tval(@cline)
+            if wtnew > wt then 
+              wt=wtnew
+              wt_str=wt_strnew
+            end if
+          end while
+      end if
+    else
+      logevent("DB_1: Reconnecting... err=" + str$(db1.error))
+      db1.connect(ODBC_DSN1,ODBC_USERNAME,ODBC_PASSWORD)
     end if
 
-    end thread
-
+    db1.freememory
     doevents
+    sleep ivl
   loop
 end sub
+
+sub db2_worker()
+  defdword db2_time=0
+  defstr cline
+  do
+    if fclose=1 then exit sub
+
+    db2.command(QUERYCMD)
+
+    if db2.error=0 and db2.fieldcount=7 and db2.row<>100 then
+      cline=db2.rowvalue(1,1): db2_time=tval(@cline)
+      logevent("DB_2: OK Time=" + str$(db2_time) + " err=" + str$(db2.error))
+
+      if db2_time > last_update then
+          logevent("DB_2: Updating values... new=" + str$(db2_time) + " old=" + str$(last_update))
+          last_update=db2_time
+          last_update_str=left$(TIME$, 5)
+          DSNUSED=ODBC_DSN1
+          cline=db2.rowvalue(2,1): cw=tval(@cline)
+          wt_str=db2.rowvalue(3,1) 
+          ar=db2.rowvalue(4,1)
+          ta=db2.rowvalue(5,1)
+          cline=db2.rowvalue(6,1): lc=tval(@cline)
+          cline=db2.rowvalue(7,1): wt=tval(@cline)
+          wtnew=0
+          wt_strnew=""
+
+          ' if multiqueue there should be more data!
+          while db2.row<>100
+            cline=db2.rowvalue(2,1): cw=cw+tval(@cline)
+            wt_strnew=db2.rowvalue(3,1)
+            dummy=db2.rowvalue(4,1)
+            dummy=db2.rowvalue(5,1)
+            cline=db2.rowvalue(6,1): lc=lc+tval(@cline)
+            cline=db2.rowvalue(7,1): wtnew=tval(@cline)
+            if wtnew > wt then 
+              wt=wtnew
+              wt_str=wt_strnew
+            end if
+          end while
+      end if
+    else
+      logevent("DB_2: Reconnecting... err=" + str$(db2.error))
+      db2.connect(ODBC_DSN2,ODBC_USERNAME,ODBC_PASSWORD)
+    end if
+
+    db2.freememory
+    doevents
+    sleep ivl
+  loop
+end sub
+
+
+
+sub http_worker()
+  do
+    if fclose=1 then exit sub
+    sock=peer.s
+    if sock>=0 then 
+      res=peer.connect(sock,HTTPHOST,HTTPPORT)
+      if res>=0 then
+        res=peer.writeline(sock,HTTPCMD)
+        time0=timer
+        while timer-time0<3 
+          'print timer-time0
+          sleep 0.1
+          if peer.isserverready(sock) then
+            buff=peer.read(sock,1024)
+            inbound_calls=field$(buff.item(buff.itemcount), ",", 2)
+            outbound_calls=field$(buff.item(buff.itemcount), ",", 3)
+            logevent("HTTP: ic=" + inbound_calls + " oc=" + outbound_calls)
+           exit while
+          end if
+        end while
+      end if
+    end if
+    res=peer.shutdown(sock,2)
+    res=peer.close(sock)
+    doevents
+    sleep ivl
+  loop
+end sub
+
 
 sub DoBlink()
   defint lcw, lwt
@@ -599,8 +583,9 @@ sub DoBlink()
 end sub
 
 sub logevent(myevent as string)
+  begin thread
   if LOGFILENAME="console" then
-    showconsole
+    begin runonce: showconsole: end runonce
     print DATE$ + " " + TIME$ + " : " + myevent
   elseif len(LOGFILENAME) > 4 then
     if not logfile.handle then
@@ -612,12 +597,20 @@ sub logevent(myevent as string)
     end if 
     logfile.writeline(DATE$ + " " + TIME$ + " : " + myevent)
   end if
+  end thread
 end sub
 
 sub keypress
   logevent("Key Pressed="+str$(wParam))
   if wParam=27 or wParam=32 or wParam=81 then goto cleanup
 end sub
+
+function tval(lpstr as long)
+  begin thread
+    defstr v$=byref$(lpstr)
+    result=VAL(v$)
+  end thread
+end function
 
 msgcapture:
   if uMsg<>&H20 then
@@ -626,11 +619,6 @@ msgcapture:
   retval zero
 return
 
-cleanup:
-ret=sendmessage(65535,274,61808,-1) 
-logevent("Cleanup invoked, exiting...")
-if logfile.handle then: logfile.close: end if
-app.terminate
 
 PROP.FILEVERSION 3,5,0,0
 PROP.PRODUCTVERSION 0,0,0,0
