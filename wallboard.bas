@@ -1,5 +1,5 @@
 '
-' Cisco UCCX Wallboard 2.2
+' Cisco UCCX Wallboard 2.3
 ' Copyright (c) 2009 by Antoni Sawicki <as@tenoware.com>
 '
 
@@ -8,9 +8,11 @@ $TYPECHECK ON
 $RESOURCE 0 as "icon.ico"
 
 declare sub DoStuff
+declare sub DoBlink
 declare sub ShowCursor lib "user32" (bShow as long)
 declare function GetSystemMetrics lib "user32" (nIndex as long) as long
 
+defstr VER_STRING="2.3"
 dim db as sqldata
 dim d as date
 deflng ret
@@ -33,11 +35,18 @@ defint pfs=0
 defint tfs=0
 defint sleepat=0
 defint wakeupat=0
+defint sla_waitqueue=0
+defint sla_waittime=0
+defint sla_beepalert=0
+defint dobeep=0
+defint beep_freq=2000
+defint beep_dur=100
 defint spacercolor=&HFFFFFF
 defint labelfgcolor=&HFFFFFF
 defint labelbgcolor=&H800000
 defint statbgcolor=&HFF0000
 defint statfgcolor=&HFFFFFF
+defint blinkcolor=&H0000FF
 defstr pnlfont="Arial Narrow"
 defstr ttlfont="Arial Narrow"
 
@@ -67,6 +76,11 @@ for n=0 to cfg.itemcount
     case "title_font": if len(f2) > 1 then ttlfont=f2
     case "sleep_hour": if VAL(f2) > 0 then sleepat=VAL(f2)
     case "wakeup_hour": if VAL(f2) > 0 then wakeupat=VAL(f2)
+    case "sla_waitqueue": if VAL(f2) > 0 then sla_waitqueue=VAL(f2)
+    case "sla_waittime": if VAL(f2) > 0 then sla_waittime=VAL(f2)
+    case "sla_beepalert": if f2="yes" then sla_beepalert=1
+    case "beep_freq": if VAL(f2) > 0 then beep_freq=VAL(f2)
+    case "beep_dur": if VAL(f2) > 0 then beep_dur=VAL(f2)
     case "panel_fontsize": if VAL(f2) > 0 then pfs=VAL(f2)
     case "title_fontsize": if VAL(f2) > 0 then tfs=VAL(f2)
     case "org_name": if len(f2) > 1 then ORG=f2
@@ -85,6 +99,9 @@ for n=0 to cfg.itemcount
       end if
     case "status_bgcolor": if len(f2) = 6 then 
         t.clear:t.append f2[5],f2[6],f2[3],f2[4],f2[1],f2[2]:statbgcolor=HEX2DW(t)
+      end if
+    case "blink_fgcolor": if len(f2) = 6 then 
+        t.clear:t.append f2[5],f2[6],f2[3],f2[4],f2[1],f2[2]:blinkcolor=HEX2DW(t)
       end if
   end select
 next n
@@ -114,7 +131,7 @@ QUERYCMD="select callsWaiting,convOldestContact,availableAgents,loggedInAgents,t
 create b as splash
   width=200:height=50:center:caption=" UCCX Wallboard Loader":onkeydown=cleanup
   create msg as label
-    top=0:left=10:width=b.width:height=b.height:caption="  UCCX Wallboard 2.2: Trying " + ODBC_DSN1 + "..."
+    top=0:left=10:width=b.width:height=b.height:caption="  UCCX Wallboard " + VER_STRING + ": Trying " + ODBC_DSN1 + "..."
   end create
 end create
 b.show
@@ -155,11 +172,22 @@ create nothreads as timer
   enabled=1
 end create
 
+create blinker as timer
+  repeated=1
+  interval=500
+  ontimer=DoBlink
+  enabled=0
+end create
+
+if sla_waitqueue>0 or sla_waittime>0 then blinker.enabled=1
+
+
 create f as splash
   width=xres:height=yres
   color=spacercolor
   caption=" UCCX Wallboard"
   onkeydown=cleanup
+  resizeable=false
 
   create bigfont as font
     name=pnlfont
@@ -187,7 +215,7 @@ create f as splash
     color=statbgcolor:textcolor=statfgcolor
     font=titlefont:style=statbar.style or &H1
     onmouseup=cleanup
-    caption=ORG + " Wallboard 2.2"
+    caption=ORG + " Wallboard " + VER_STRING
   end create
 
   '
@@ -296,7 +324,10 @@ create f as splash
 
 end create
 
+'
 ' main
+'
+'showconsole
 if showmousecursor=false then ShowCursor(0)
 if xpos>0 and ypos>0 then
   f.top=ypos-1:f.left=xpos-1
@@ -311,7 +342,6 @@ f.showmodal
 '
 sub DoStuff
   db.command(QUERYCMD)
-
   if db.error then
     db.freememory
     db.close
@@ -345,11 +375,6 @@ sub DoStuff
     goto cleanup
   end if
 
-  if showdsn=true then
-    stbc=ORG + "  " + QNAME + "  " + left$(TIME$, 5) + "  " + DSNUSED
-  else
-    stbc=ORG + "  " + QNAME + "  " + left$(TIME$, 5)
-  end if
 
   cw=VAL(db.rowvalue(1,1))
   wt3=right$(db.rowvalue(2,1),5)
@@ -378,6 +403,16 @@ sub DoStuff
     end if
   end while
 
+
+  d.update
+
+  if showdsn=true then
+    stbc=ORG + "  " + QNAME + "  " + d.timeformat("hh:mm tt") + "  " + DSNUSED
+  else
+    stbc=ORG + "  " + QNAME + "  " + d.timeformat("hh:mm tt")
+  end if
+
+
   ' update only on a change to prevent flicker
   if stbc <> statbar.caption then statbar.caption=stbc
   if str$(cw) <> cw2.caption then cw2.caption=str$(cw)
@@ -395,10 +430,7 @@ sub DoStuff
     end if
   end if
 
-
-
   if wakeupat<>0 and sleepat<>0 and wakeupat<>sleepat then
-    d.update
     if d.hour=wakeupat and d.minute=0 then ret=sendmessage(65535,274,61808,-1) 
     if d.hour=sleepat and d.minute=0 then  ret=sendmessage(65535,274,61808,2)  
   end if
@@ -407,12 +439,50 @@ sub DoStuff
   doevents
 end sub
 
+sub DoBlink
+  dobeep=0
+  if sla_waitqueue>0 and cw>=sla_waitqueue then
+    if cw2.textcolor=labelfgcolor then
+      cw2.textcolor=blinkcolor
+      dobeep=1
+    else
+      cw2.textcolor=labelfgcolor
+    end if
+    cw2.repaint
+  else
+    if cw2.textcolor<>labelfgcolor then
+      cw2.textcolor=labelfgcolor
+      cw2.repaint
+    end if
+  end if
+
+  if sla_waittime>0 and wt>=(sla_waittime*1000) then
+    if wt2.textcolor=labelfgcolor then
+      wt2.textcolor=blinkcolor
+      dobeep=1
+    else
+      wt2.textcolor=labelfgcolor
+    end if
+    wt2.repaint
+  else 
+    if wt2.textcolor<>labelfgcolor then
+      wt2.textcolor=labelfgcolor
+      wt2.repaint
+    end if
+  end if
+
+  if sla_beepalert=1 and dobeep=1 then
+    sound beep_freq, beep_dur
+  end if
+  doevents
+end sub
+
 cleanup:
 ret=sendmessage(65535,274,61808,-1) 
 db.close
 app.terminate
 
-PROP.FILEVERSION 2,2,0,0
+PROP.FILEVERSION 2,3,0,0
 PROP.PRODUCTVERSION 0,0,0,0
 PROP.FILEFLAGSMASK 0x0000003FL
 PROP.FILEFLAGS 0x0000000BL
@@ -427,9 +497,9 @@ PROP.BEGIN
 PROP.VALUE "Author","Antoni Sawicki"
 PROP.VALUE "Contact e-mail", "tenox@tenox.tc"
 PROP.VALUE "URL", "http://www.tenox.tc/out/#wallboard"
-PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 2.2"
-PROP.VALUE "FileVersion", "2.2.0.0" 
-PROP.VALUE "LegalCopyright", "(c) 2009 by Antoni Sawicki"
+PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 2.3"
+PROP.VALUE "FileVersion", "2.3.0.0"
+PROP.VALUE "LegalCopyright", "(c) 2010 by Antoni Sawicki"
 PROP.END  
 PROP.END  
 PROP.END  
