@@ -1,5 +1,5 @@
 '
-' Cisco UCCX Wallboard 3.7.1BETA
+' Cisco UCCX Wallboard 3.7.2BETA
 ' Copyright (c) 2009-2013 by Antoni Sawicki <as@tenoware.com>
 '
 
@@ -49,7 +49,13 @@ defint spacercolor=&HFFFFFF : defint labelfgcolor=&HFFFFFF : defint labelbgcolor
 defint statbgcolor=&HFF0000 : defint statfgcolor=&HFFFFFF :defint blinkcolor=&H0000FF
 defstr pnlfont="Arial Narrow" : defstr ttlfont="Arial Narrow"
 defstr buff
-
+defstr caption_a="Wait Queue"
+defstr caption_b="Oldest Caller Wait Time"
+defstr caption_c="Lost Calls"
+defstr caption_d="Ready Agents"
+defstr caption_e="Talking Agents"
+defstr caption_f="Online Agents"
+defstr caption_g="Total Calls"
 
 '
 ' read config file
@@ -74,6 +80,13 @@ for n=0 to cfg.itemcount
     case "custom_yres": if VAL(f2) > 0 then yres=VAL(f2)
     case "custom_xpos": if VAL(f2) > 0 then xpos=VAL(f2)
     case "custom_ypos": if VAL(f2) > 0 then ypos=VAL(f2)
+    case "caption_a": if len(f2) > 1 then caption_a=f2
+    case "caption_b": if len(f2) > 1 then caption_b=f2
+    case "caption_c": if len(f2) > 1 then caption_c=f2
+    case "caption_d": if len(f2) > 1 then caption_d=f2
+    case "caption_e": if len(f2) > 1 then caption_e=f2
+    case "caption_f": if len(f2) > 1 then caption_f=f2
+    case "caption_g": if len(f2) > 1 then caption_g=f2
     case "multiqueue": if f2="yes" then mqu=true
     case "showdsn": if f2="yes" then showdsn=true
     case "disptimeformat": if f2="12h" then disptimeformat=12
@@ -228,7 +241,7 @@ create f as form
     top=h9:left=0:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=titlefont:style=pt_a.style or &H1
-    caption="Wait Queue"
+    caption=caption_a
   end create
 
   create pc_a as label
@@ -241,7 +254,7 @@ create f as form
     top=h9:left=w4:width=2*w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=titlefont:style=pt_b.style or &H1
-    caption="Oldest Caller Wait Time"
+    caption=caption_b
   end create
 
   create pc_b as label
@@ -254,7 +267,7 @@ create f as form
     top=h9:left=3*w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=titlefont:style=pt_c.style or &H1
-    caption="Lost Calls"
+    caption=caption_c
   end create
 
   create pc_c as label
@@ -270,7 +283,7 @@ create f as form
     top=5*h9:left=0:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=titlefont:style=pt_d.style or &H1
-    caption="Ready Agents"
+    caption=caption_d
   end create
 
   create pc_d as label
@@ -283,7 +296,7 @@ create f as form
     top=5*h9:left=w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=titlefont:style=pt_e.style or &H1
-    caption="Talking Agents"
+    caption=caption_e
   end create
 
   create pc_e as label
@@ -296,7 +309,7 @@ create f as form
     top=5*h9:left=2*w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=titlefont:style=pt_f.style or &H1
-    caption="Online Agents"
+    caption=caption_f
   end create
 
   create pc_f as label
@@ -309,7 +322,7 @@ create f as form
     top=5*h9:left=3*w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=titlefont:style=pt_g.style or &H1
-    caption="Total Calls"
+    caption=caption_g
   end create
 
   create pc_g as label
@@ -574,11 +587,11 @@ PROP.StringFileInfo
 PROP.BEGIN
 PROP.BLOCK "040904E4"
 PROP.BEGIN
-PROP.VALUE "Author","Antoni Sawicki"
-PROP.VALUE "Contact e-mail", "tenox@tenox.tc"
-PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 3.7.1BETA"
-PROP.VALUE "FileVersion", "3.7.1.0" 
+PROP.VALUE "Author","Antoni Sawicki <as@tenoware.com>"
+PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 3.7.2BETA"
+PROP.VALUE "FileVersion", "3.7.2.0" 
 PROP.VALUE "LegalCopyright", "(c) 2009-2013 by Antoni Sawicki"
+PROP.VALUE "Additional Credits", "Aaron Harrison <aaro.harrison@ipcommute.co.uk>, Greg Markiewicz <gregm@bootstrap.ie>"
 PROP.END  
 PROP.END  
 PROP.END  
