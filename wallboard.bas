@@ -1,5 +1,5 @@
 '
-' Cisco UCCX Wallboard 2.3
+' Cisco UCCX Wallboard 3.0
 ' Copyright (c) 2009 by Antoni Sawicki <as@tenoware.com>
 '
 
@@ -8,11 +8,9 @@ $TYPECHECK ON
 $RESOURCE 0 as "icon.ico"
 
 declare sub DoStuff
-declare sub DoBlink
 declare sub ShowCursor lib "user32" (bShow as long)
 declare function GetSystemMetrics lib "user32" (nIndex as long) as long
 
-defstr VER_STRING="2.3"
 dim db as sqldata
 dim d as date
 deflng ret
@@ -23,7 +21,6 @@ defstr ORG="Cisco UCCX"
 defstr q, QNAME, SQLQNAME, ODBC_DSN1, ODBC_DSN2, ODBC_USERNAME, ODBC_PASSWORD, DSNUSED, QUERYCMD
 defint xres=GetSystemMetrics(0)
 defint yres=GetSystemMetrics(1)
-defint xpos,ypos
 defint spc=1
 defint showmousecursor=false
 defint showdsn=false
@@ -35,20 +32,18 @@ defint pfs=0
 defint tfs=0
 defint sleepat=0
 defint wakeupat=0
-defint sla_waitqueue=0
-defint sla_waittime=0
-defint sla_beepalert=0
-defint dobeep=0
-defint beep_freq=2000
-defint beep_dur=100
 defint spacercolor=&HFFFFFF
 defint labelfgcolor=&HFFFFFF
 defint labelbgcolor=&H800000
 defint statbgcolor=&HFF0000
 defint statfgcolor=&HFFFFFF
-defint blinkcolor=&H0000FF
 defstr pnlfont="Arial Narrow"
 defstr ttlfont="Arial Narrow"
+deflng sock, res 
+defint HTTPPORT
+defstr buff, direct_calls, HTTPCMD, HTTPHOST, HTTPFILE
+dim time0 as REAL10
+dim peer as SOCKET
 
 if not fileexists("wallboard.cfg") then 
   showmessage "ERROR: Unable to open configuration file!"
@@ -68,23 +63,19 @@ for n=0 to cfg.itemcount
     case "spacer_size": if VAL(f2) > 0 then spc=VAL(f2)
     case "custom_xres": if VAL(f2) > 0 then xres=VAL(f2)
     case "custom_yres": if VAL(f2) > 0 then yres=VAL(f2)
-    case "custom_xpos": if VAL(f2) > 0 then xpos=VAL(f2)
-    case "custom_ypos": if VAL(f2) > 0 then ypos=VAL(f2)
     case "multiqueue": if f2="yes" then mqu=true
     case "showdsn": if f2="yes" then showdsn=true
     case "panel_font": if len(f2) > 1 then pnlfont=f2
     case "title_font": if len(f2) > 1 then ttlfont=f2
     case "sleep_hour": if VAL(f2) > 0 then sleepat=VAL(f2)
     case "wakeup_hour": if VAL(f2) > 0 then wakeupat=VAL(f2)
-    case "sla_waitqueue": if VAL(f2) > 0 then sla_waitqueue=VAL(f2)
-    case "sla_waittime": if VAL(f2) > 0 then sla_waittime=VAL(f2)
-    case "sla_beepalert": if f2="yes" then sla_beepalert=1
-    case "beep_freq": if VAL(f2) > 0 then beep_freq=VAL(f2)
-    case "beep_dur": if VAL(f2) > 0 then beep_dur=VAL(f2)
     case "panel_fontsize": if VAL(f2) > 0 then pfs=VAL(f2)
     case "title_fontsize": if VAL(f2) > 0 then tfs=VAL(f2)
     case "org_name": if len(f2) > 1 then ORG=f2
     case "showmousecursor": if f2="yes" then showmousecursor=true
+    case "http_host": if len(f2) > 1 then HTTPHOST=f2
+    case "http_port": if VAL(f2) > 1 then HTTPPORT=VAL(f2)
+    case "http_file": if len(f2) > 1 then HTTPFILE=f2
     case "spacer_color": if len(f2) = 6 then 
         t.clear:t.append f2[5],f2[6],f2[3],f2[4],f2[1],f2[2]:spacercolor=HEX2DW(t)
       end if
@@ -99,9 +90,6 @@ for n=0 to cfg.itemcount
       end if
     case "status_bgcolor": if len(f2) = 6 then 
         t.clear:t.append f2[5],f2[6],f2[3],f2[4],f2[1],f2[2]:statbgcolor=HEX2DW(t)
-      end if
-    case "blink_fgcolor": if len(f2) = 6 then 
-        t.clear:t.append f2[5],f2[6],f2[3],f2[4],f2[1],f2[2]:blinkcolor=HEX2DW(t)
       end if
   end select
 next n
@@ -125,13 +113,30 @@ else
   SQLQNAME=QNAME
 end if
 
-QUERYCMD="select callsWaiting,convOldestContact,availableAgents,loggedInAgents,talkingAgents,callsAbandoned,totalCalls,OldestContact" + _
+QUERYCMD="select callsWaiting,convOldestContact,availableAgents,talkingAgents,callsAbandoned,totalCalls,OldestContact" + _
          " from RtCSQsSummary where CSQName like '" + SQLQNAME + "';")
+
+HTTPCMD="GET " + HTTPFILE + " HTTP/1.0" + CRLF
+
+if len(HTTPHOST) < 6 then
+  showmessage "ERROR: http_host not defined"
+  app.terminate
+end if
+
+if HTTPPORT < 2 then
+  showmessage "ERROR: http_port not defined"
+  app.terminate
+end if
+
+if len(HTTPFILE) < 4 then
+  showmessage "ERROR: http_file not defined"
+  app.terminate
+end if
 
 create b as splash
   width=200:height=50:center:caption=" UCCX Wallboard Loader":onkeydown=cleanup
   create msg as label
-    top=0:left=10:width=b.width:height=b.height:caption="  UCCX Wallboard " + VER_STRING + ": Trying " + ODBC_DSN1 + "..."
+    top=0:left=10:width=b.width:height=b.height:caption="UCCX Wallboard 3.0: Trying " + ODBC_DSN1 + "..."
   end create
 end create
 b.show
@@ -154,8 +159,6 @@ if db.error > 1 then
     goto cleanup
   end if
 end if
-msg.caption="  Connected..."
-
 
 w=xres+(4*spc)
 w4=int(w/4)
@@ -172,22 +175,11 @@ create nothreads as timer
   enabled=1
 end create
 
-create blinker as timer
-  repeated=1
-  interval=500
-  ontimer=DoBlink
-  enabled=0
-end create
-
-if sla_waitqueue>0 or sla_waittime>0 then blinker.enabled=1
-
-
 create f as splash
   width=xres:height=yres
   color=spacercolor
-  caption=" UCCX Wallboard"
+  center:caption=" UCCX Wallboard"
   onkeydown=cleanup
-  resizeable=false
 
   create bigfont as font
     name=pnlfont
@@ -215,7 +207,7 @@ create f as splash
     color=statbgcolor:textcolor=statfgcolor
     font=titlefont:style=statbar.style or &H1
     onmouseup=cleanup
-    caption=ORG + " Wallboard " + VER_STRING
+    caption=ORG + " Wallboard 3.0"
   end create
 
   '
@@ -280,31 +272,31 @@ create f as splash
     caption="??"
   end create
 
-  create al1 as label
-    top=5*h9:left=w4:width=w4-spc:height=h9-spc
-    color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=al1.style or &H1
-    caption="Online Agents"
-  end create
-
-  create al2 as label
-    top=6*h9:left=w4:width=w4-spc:height=(3*h9)-spc
-    color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=al2.style or &H1
-    caption="??"
-  end create
-
   create at1 as label
-    top=5*h9:left=2*w4:width=w4-spc:height=h9-spc
+    top=5*h9:left=w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=titlefont:style=at1.style or &H1
     caption="Talking Agents"
   end create
 
   create at2 as label
-    top=6*h9:left=2*w4:width=w4-spc:height=(3*h9)-spc
+    top=6*h9:left=w4:width=w4-spc:height=(3*h9)-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=bigfont:style=at2.style or &H1
+    caption="??"
+  end create
+
+  create dc1 as label
+    top=5*h9:left=2*w4:width=w4-spc:height=h9-spc
+    color=labelbgcolor:textcolor=labelfgcolor
+    font=titlefont:style=dc1.style or &H1
+    caption="Total Calls"
+  end create
+
+  create dc2 as label
+    top=6*h9:left=2*w4:width=w4-spc:height=(3*h9)-spc
+    color=labelbgcolor:textcolor=labelfgcolor
+    font=bigfont:style=dc2.style or &H1
     caption="??"
   end create
 
@@ -312,7 +304,7 @@ create f as splash
     top=5*h9:left=3*w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=titlefont:style=tc1.style or &H1
-    caption="Total Calls"
+    caption="Queue Calls"
   end create
 
   create tc2 as label
@@ -324,17 +316,9 @@ create f as splash
 
 end create
 
-'
 ' main
-'
-'showconsole
 if showmousecursor=false then ShowCursor(0)
-if xpos>0 and ypos>0 then
-  f.top=ypos-1:f.left=xpos-1
-else
-  f.center
-end if
-b.visible=0
+'showconsole
 f.showmodal
 
 '
@@ -342,6 +326,7 @@ f.showmodal
 '
 sub DoStuff
   db.command(QUERYCMD)
+
   if db.error then
     db.freememory
     db.close
@@ -370,20 +355,24 @@ sub DoStuff
     goto cleanup
   end if
   
-  if db.fieldcount<>8 then 
+  if db.fieldcount<>7 then 
     showmessage "ODBC query returned wrong number of columns"
     goto cleanup
   end if
 
+  if showdsn=true then
+    stbc=ORG + "  " + QNAME + "  " + left$(TIME$, 5) + "  " + DSNUSED
+  else
+    stbc=ORG + "  " + QNAME + "  " + left$(TIME$, 5)
+  end if
 
   cw=VAL(db.rowvalue(1,1))
   wt3=right$(db.rowvalue(2,1),5)
   ar=VAL(db.rowvalue(3,1))
-  al=VAL(db.rowvalue(4,1))
-  at=VAL(db.rowvalue(5,1))
-  lc=VAL(db.rowvalue(6,1))
-  tc=VAL(db.rowvalue(7,1))
-  wt=VAL(db.rowvalue(8,1))
+  at=VAL(db.rowvalue(4,1))
+  lc=VAL(db.rowvalue(5,1))
+  tc=VAL(db.rowvalue(6,1))
+  wt=VAL(db.rowvalue(7,1))
   wtnew=0
   wt3new=""
 
@@ -393,24 +382,36 @@ sub DoStuff
     wt3new=right$(db.rowvalue(2,1),5)    
     dummy=VAL(db.rowvalue(3,1))
     dummy=VAL(db.rowvalue(4,1))
-    dummy=VAL(db.rowvalue(5,1))
-    lc=lc+VAL(db.rowvalue(6,1))
-    tc=tc+VAL(db.rowvalue(7,1)) 
-    wtnew=VAL(db.rowvalue(8,1))
+    lc=lc+VAL(db.rowvalue(5,1))
+    tc=tc+VAL(db.rowvalue(6,1)) 
+    wtnew=VAL(db.rowvalue(7,1))
     if wtnew > wt then 
       wt=wtnew
       wt3=wt3new
     end if
   end while
 
-
-  d.update
-
-  if showdsn=true then
-    stbc=ORG + "  " + QNAME + "  " + d.timeformat("hh:mm tt") + "  " + DSNUSED
-  else
-    stbc=ORG + "  " + QNAME + "  " + d.timeformat("hh:mm tt")
+  ' dirty little hack to get direct calls from billing server
+  sock=peer.s
+  if sock>=0 then 
+    res=peer.connect(sock,HTTPHOST,HTTPPORT)
+    if res>=0 then
+      res=peer.writeline(sock,HTTPCMD)
+      time0=timer
+      while timer-time0<3 
+        'print timer-time0
+        sleep 0.1
+        if peer.isserverready(sock) then
+          buff=peer.read(sock,1024)
+          direct_calls=field$(buff.item(buff.itemcount), ",", 2)
+          'print "direct_calls=[" + direct_calls + "]"
+         exit while
+        end if
+      end while
+    end if
   end if
+  res=peer.shutdown(sock,2)
+  res=peer.close(sock)
 
 
   ' update only on a change to prevent flicker
@@ -418,9 +419,18 @@ sub DoStuff
   if str$(cw) <> cw2.caption then cw2.caption=str$(cw)
   if wt3 <> wt2.caption then wt2.caption=wt3
   if str$(ar) <> ar2.caption then ar2.caption=str$(ar)
-  if str$(al) <> al2.caption then al2.caption=str$(al)
   if str$(at) <> at2.caption then at2.caption=str$(at)
   if str$(lc) <> lc2.caption then lc2.caption=str$(lc)
+
+  if direct_calls <> dc2.caption then 
+    dc2.caption=direct_calls
+    if len(dc2.caption) > 2 then 
+      dc2.font=notbigfont
+    else 
+      dc2.font=bigfont
+    end if
+  end if
+
   if str$(tc) <> tc2.caption then 
     tc2.caption=str$(tc)
     if len(tc2.caption) > 2 then 
@@ -430,7 +440,10 @@ sub DoStuff
     end if
   end if
 
+
+
   if wakeupat<>0 and sleepat<>0 and wakeupat<>sleepat then
+    d.update
     if d.hour=wakeupat and d.minute=0 then ret=sendmessage(65535,274,61808,-1) 
     if d.hour=sleepat and d.minute=0 then  ret=sendmessage(65535,274,61808,2)  
   end if
@@ -439,50 +452,12 @@ sub DoStuff
   doevents
 end sub
 
-sub DoBlink
-  dobeep=0
-  if sla_waitqueue>0 and cw>=sla_waitqueue then
-    if cw2.textcolor=labelfgcolor then
-      cw2.textcolor=blinkcolor
-      dobeep=1
-    else
-      cw2.textcolor=labelfgcolor
-    end if
-    cw2.repaint
-  else
-    if cw2.textcolor<>labelfgcolor then
-      cw2.textcolor=labelfgcolor
-      cw2.repaint
-    end if
-  end if
-
-  if sla_waittime>0 and wt>=(sla_waittime*1000) then
-    if wt2.textcolor=labelfgcolor then
-      wt2.textcolor=blinkcolor
-      dobeep=1
-    else
-      wt2.textcolor=labelfgcolor
-    end if
-    wt2.repaint
-  else 
-    if wt2.textcolor<>labelfgcolor then
-      wt2.textcolor=labelfgcolor
-      wt2.repaint
-    end if
-  end if
-
-  if sla_beepalert=1 and dobeep=1 then
-    sound beep_freq, beep_dur
-  end if
-  doevents
-end sub
-
 cleanup:
 ret=sendmessage(65535,274,61808,-1) 
 db.close
 app.terminate
 
-PROP.FILEVERSION 2,3,0,0
+PROP.FILEVERSION 3,0,0,0
 PROP.PRODUCTVERSION 0,0,0,0
 PROP.FILEFLAGSMASK 0x0000003FL
 PROP.FILEFLAGS 0x0000000BL
@@ -495,11 +470,9 @@ PROP.BEGIN
 PROP.BLOCK "040904E4"
 PROP.BEGIN
 PROP.VALUE "Author","Antoni Sawicki"
-PROP.VALUE "Contact e-mail", "tenox@tenox.tc"
-PROP.VALUE "URL", "http://www.tenox.tc/out/#wallboard"
-PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 2.3"
-PROP.VALUE "FileVersion", "2.3.0.0"
-PROP.VALUE "LegalCopyright", "(c) 2010 by Antoni Sawicki"
+PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 3.0"
+PROP.VALUE "FileVersion", "3.0.0.0" 
+
 PROP.END  
 PROP.END  
 PROP.END  
