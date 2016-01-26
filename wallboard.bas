@@ -1,5 +1,5 @@
 '
-' Cisco UCCX Wallboard 2.1
+' Cisco UCCX Wallboard 2.2
 ' Copyright (c) 2009 by Antoni Sawicki <as@tenoware.com>
 '
 
@@ -21,6 +21,7 @@ defstr ORG="Cisco UCCX"
 defstr q, QNAME, SQLQNAME, ODBC_DSN1, ODBC_DSN2, ODBC_USERNAME, ODBC_PASSWORD, DSNUSED, QUERYCMD
 defint xres=GetSystemMetrics(0)
 defint yres=GetSystemMetrics(1)
+defint xpos,ypos
 defint spc=1
 defint showmousecursor=false
 defint showdsn=false
@@ -58,6 +59,8 @@ for n=0 to cfg.itemcount
     case "spacer_size": if VAL(f2) > 0 then spc=VAL(f2)
     case "custom_xres": if VAL(f2) > 0 then xres=VAL(f2)
     case "custom_yres": if VAL(f2) > 0 then yres=VAL(f2)
+    case "custom_xpos": if VAL(f2) > 0 then xpos=VAL(f2)
+    case "custom_ypos": if VAL(f2) > 0 then ypos=VAL(f2)
     case "multiqueue": if f2="yes" then mqu=true
     case "showdsn": if f2="yes" then showdsn=true
     case "panel_font": if len(f2) > 1 then pnlfont=f2
@@ -111,7 +114,7 @@ QUERYCMD="select callsWaiting,convOldestContact,availableAgents,loggedInAgents,t
 create b as splash
   width=200:height=50:center:caption=" UCCX Wallboard Loader":onkeydown=cleanup
   create msg as label
-    top=0:left=10:width=b.width:height=b.height:caption="UCCX Wallboard 2.1: Trying " + ODBC_DSN1 + "..."
+    top=0:left=10:width=b.width:height=b.height:caption="  UCCX Wallboard 2.2: Trying " + ODBC_DSN1 + "..."
   end create
 end create
 b.show
@@ -134,6 +137,8 @@ if db.error > 1 then
     goto cleanup
   end if
 end if
+msg.caption="  Connected..."
+
 
 w=xres+(4*spc)
 w4=int(w/4)
@@ -153,7 +158,7 @@ end create
 create f as splash
   width=xres:height=yres
   color=spacercolor
-  center:caption=" UCCX Wallboard"
+  caption=" UCCX Wallboard"
   onkeydown=cleanup
 
   create bigfont as font
@@ -182,7 +187,7 @@ create f as splash
     color=statbgcolor:textcolor=statfgcolor
     font=titlefont:style=statbar.style or &H1
     onmouseup=cleanup
-    caption=ORG + " Wallboard 2.1"
+    caption=ORG + " Wallboard 2.2"
   end create
 
   '
@@ -293,6 +298,12 @@ end create
 
 ' main
 if showmousecursor=false then ShowCursor(0)
+if xpos>0 and ypos>0 then
+  f.top=ypos-1:f.left=xpos-1
+else
+  f.center
+end if
+b.visible=0
 f.showmodal
 
 '
@@ -401,7 +412,7 @@ ret=sendmessage(65535,274,61808,-1)
 db.close
 app.terminate
 
-PROP.FILEVERSION 2,1,0,0
+PROP.FILEVERSION 2,2,0,0
 PROP.PRODUCTVERSION 0,0,0,0
 PROP.FILEFLAGSMASK 0x0000003FL
 PROP.FILEFLAGS 0x0000000BL
@@ -415,8 +426,9 @@ PROP.BLOCK "040904E4"
 PROP.BEGIN
 PROP.VALUE "Author","Antoni Sawicki"
 PROP.VALUE "Contact e-mail", "tenox@tenox.tc"
-PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 2.1"
-PROP.VALUE "FileVersion", "2.1.0.0" 
+PROP.VALUE "URL", "http://www.tenox.tc/out/#wallboard"
+PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 2.2"
+PROP.VALUE "FileVersion", "2.2.0.0" 
 PROP.VALUE "LegalCopyright", "(c) 2009 by Antoni Sawicki"
 PROP.END  
 PROP.END  
