@@ -1,11 +1,13 @@
 '
-' Cisco UCCX Wallboard 3.0
+' Cisco UCCX Wallboard 3.1
 ' Copyright (c) 2009 by Antoni Sawicki <as@tenoware.com>
 '
 
 $APPTYPE GUI
 $TYPECHECK ON
 $RESOURCE 0 as "icon.ico"
+
+sleep 3
 
 declare sub DoStuff
 declare sub ShowCursor lib "user32" (bShow as long)
@@ -113,7 +115,7 @@ else
   SQLQNAME=QNAME
 end if
 
-QUERYCMD="select callsWaiting,convOldestContact,availableAgents,talkingAgents,callsAbandoned,totalCalls,OldestContact" + _
+QUERYCMD="select callsWaiting,convOldestContact,availableAgents,loggedInAgents,talkingAgents,callsAbandoned,totalCalls,OldestContact" + _
          " from RtCSQsSummary where CSQName like '" + SQLQNAME + "';")
 
 HTTPCMD="GET " + HTTPFILE + " HTTP/1.0" + CRLF
@@ -136,7 +138,7 @@ end if
 create b as splash
   width=200:height=50:center:caption=" UCCX Wallboard Loader":onkeydown=cleanup
   create msg as label
-    top=0:left=10:width=b.width:height=b.height:caption="UCCX Wallboard 3.0: Trying " + ODBC_DSN1 + "..."
+    top=0:left=10:width=b.width:height=b.height:caption="UCCX Wallboard 3.1: Trying " + ODBC_DSN1 + "..."
   end create
 end create
 b.show
@@ -207,7 +209,7 @@ create f as splash
     color=statbgcolor:textcolor=statfgcolor
     font=titlefont:style=statbar.style or &H1
     onmouseup=cleanup
-    caption=ORG + " Wallboard 3.0"
+    caption=ORG + " Wallboard 3.1"
   end create
 
   '
@@ -272,31 +274,31 @@ create f as splash
     caption="??"
   end create
 
-  create at1 as label
+  create al1 as label
     top=5*h9:left=w4:width=w4-spc:height=h9-spc
+    color=labelbgcolor:textcolor=labelfgcolor
+    font=titlefont:style=al1.style or &H1
+    caption="Online Agents"
+  end create
+
+  create al2 as label
+    top=6*h9:left=w4:width=w4-spc:height=(3*h9)-spc
+    color=labelbgcolor:textcolor=labelfgcolor
+    font=bigfont:style=al2.style or &H1
+    caption="??"
+  end create
+
+  create at1 as label
+    top=5*h9:left=2*w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=titlefont:style=at1.style or &H1
     caption="Talking Agents"
   end create
 
   create at2 as label
-    top=6*h9:left=w4:width=w4-spc:height=(3*h9)-spc
-    color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=at2.style or &H1
-    caption="??"
-  end create
-
-  create dc1 as label
-    top=5*h9:left=2*w4:width=w4-spc:height=h9-spc
-    color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=dc1.style or &H1
-    caption="Total Calls"
-  end create
-
-  create dc2 as label
     top=6*h9:left=2*w4:width=w4-spc:height=(3*h9)-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=dc2.style or &H1
+    font=bigfont:style=at2.style or &H1
     caption="??"
   end create
 
@@ -304,7 +306,7 @@ create f as splash
     top=5*h9:left=3*w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
     font=titlefont:style=tc1.style or &H1
-    caption="Queue Calls"
+    caption="Total Calls"
   end create
 
   create tc2 as label
@@ -318,7 +320,6 @@ end create
 
 ' main
 if showmousecursor=false then ShowCursor(0)
-'showconsole
 f.showmodal
 
 '
@@ -355,7 +356,7 @@ sub DoStuff
     goto cleanup
   end if
   
-  if db.fieldcount<>7 then 
+  if db.fieldcount<>8 then 
     showmessage "ODBC query returned wrong number of columns"
     goto cleanup
   end if
@@ -369,29 +370,31 @@ sub DoStuff
   cw=VAL(db.rowvalue(1,1))
   wt3=right$(db.rowvalue(2,1),5)
   ar=VAL(db.rowvalue(3,1))
-  at=VAL(db.rowvalue(4,1))
-  lc=VAL(db.rowvalue(5,1))
-  tc=VAL(db.rowvalue(6,1))
-  wt=VAL(db.rowvalue(7,1))
+  al=VAL(db.rowvalue(4,1))
+  at=VAL(db.rowvalue(5,1))
+  lc=VAL(db.rowvalue(6,1))
+  tc=VAL(db.rowvalue(7,1))
+  wt=VAL(db.rowvalue(8,1))
   wtnew=0
   wt3new=""
 
-  ' there is more data!
+  ' if multiqueue there should be more data!
   while db.row<>100
     cw=cw+VAL(db.rowvalue(1,1))
     wt3new=right$(db.rowvalue(2,1),5)    
     dummy=VAL(db.rowvalue(3,1))
     dummy=VAL(db.rowvalue(4,1))
-    lc=lc+VAL(db.rowvalue(5,1))
-    tc=tc+VAL(db.rowvalue(6,1)) 
-    wtnew=VAL(db.rowvalue(7,1))
+    dummy=VAL(db.rowvalue(5,1))
+    lc=lc+VAL(db.rowvalue(6,1))
+    tc=tc+VAL(db.rowvalue(7,1)) 
+    wtnew=VAL(db.rowvalue(8,1))
     if wtnew > wt then 
       wt=wtnew
       wt3=wt3new
     end if
   end while
 
-  ' dirty little hack to get direct calls from billing server
+  ' dirty little hack to get direct calls from the billing server
   sock=peer.s
   if sock>=0 then 
     res=peer.connect(sock,HTTPHOST,HTTPPORT)
@@ -419,28 +422,18 @@ sub DoStuff
   if str$(cw) <> cw2.caption then cw2.caption=str$(cw)
   if wt3 <> wt2.caption then wt2.caption=wt3
   if str$(ar) <> ar2.caption then ar2.caption=str$(ar)
+  if str$(al) <> al2.caption then al2.caption=str$(al)
   if str$(at) <> at2.caption then at2.caption=str$(at)
   if str$(lc) <> lc2.caption then lc2.caption=str$(lc)
 
-  if direct_calls <> dc2.caption then 
-    dc2.caption=direct_calls
-    if len(dc2.caption) > 2 then 
-      dc2.font=notbigfont
-    else 
-      dc2.font=bigfont
-    end if
-  end if
-
-  if str$(tc) <> tc2.caption then 
-    tc2.caption=str$(tc)
+  if direct_calls <> tc2.caption then 
+    tc2.caption=direct_calls
     if len(tc2.caption) > 2 then 
       tc2.font=notbigfont
     else 
       tc2.font=bigfont
     end if
   end if
-
-
 
   if wakeupat<>0 and sleepat<>0 and wakeupat<>sleepat then
     d.update
@@ -457,7 +450,7 @@ ret=sendmessage(65535,274,61808,-1)
 db.close
 app.terminate
 
-PROP.FILEVERSION 3,0,0,0
+PROP.FILEVERSION 3,1,0,0
 PROP.PRODUCTVERSION 0,0,0,0
 PROP.FILEFLAGSMASK 0x0000003FL
 PROP.FILEFLAGS 0x0000000BL
@@ -470,9 +463,8 @@ PROP.BEGIN
 PROP.BLOCK "040904E4"
 PROP.BEGIN
 PROP.VALUE "Author","Antoni Sawicki"
-PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 3.0"
-PROP.VALUE "FileVersion", "3.0.0.0" 
-
+PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 3.1"
+PROP.VALUE "FileVersion", "3.1.0.0" 
 PROP.END  
 PROP.END  
 PROP.END  
