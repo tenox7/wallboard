@@ -1,5 +1,5 @@
 '
-' Cisco UCCX Wallboard 3.3
+' Cisco UCCX Wallboard 3.4
 ' Copyright (c) 2009 by Antoni Sawicki <as@tenoware.com>
 '
 
@@ -12,7 +12,7 @@ declare sub DoBlink
 declare sub ShowCursor lib "user32" (bShow as long)
 declare function GetSystemMetrics lib "user32" (nIndex as long) as long
 
-dim db as sqldata
+dim db1 as sqldata
 dim db2 as sqldata
 dim d as date
 deflng ret
@@ -21,6 +21,7 @@ defint ivl=5
 defint mqu=false
 defstr ORG="Cisco UCCX"
 defstr q, QNAME, SQLQNAME, ODBC_DSN1, ODBC_DSN2, ODBC_USERNAME, ODBC_PASSWORD, DSNUSED, QUERYCMD
+deflng db1_time, db2_time
 defint xres=GetSystemMetrics(0)
 defint yres=GetSystemMetrics(1)
 defint xpos,ypos
@@ -30,7 +31,7 @@ defint showdsn=false
 defint w,h, w4, h9
 defint n, dummy, inblink
 defint wt,wtnew,cw,lc,ar,al,ta
-defstr wt3, wt3new, stbc
+defstr wt_str, wt_strnew, stbc
 defint pfs=0
 defint tfs=0
 defint sleepat=0
@@ -51,6 +52,9 @@ defstr buff, inbound_calls, outbound_calls, HTTPCMD, HTTPHOST, HTTPFILE
 dim time0 as REAL10
 dim peer as SOCKET
 
+'
+' read config file
+'
 if not fileexists("wallboard.cfg") then 
   showmessage "ERROR: Unable to open configuration file!"
   app.terminate
@@ -117,6 +121,11 @@ if len(ODBC_DSN1) < 2 then
   app.terminate
 end if
 
+if ODBC_DSN1=ODBC_DSN2 then
+  showmessage "ERROR: dsn1 is same as dsn2"
+  app.terminate
+end if
+
 if len(ODBC_USERNAME) < 2 or ODBC_USERNAME="null" then ODBC_USERNAME=null
 if len(ODBC_PASSWORD) < 2 or ODBC_PASSWORD="null" then ODBC_PASSWORD=null
 
@@ -126,8 +135,9 @@ else
   SQLQNAME=QNAME
 end if
 
-QUERYCMD="select callsWaiting,convOldestContact,availableAgents,talkingAgents,callsAbandoned,OldestContact" + _
-         " from RtCSQsSummary where CSQName like '" + SQLQNAME + "';")
+QUERYCMD="select timestamp = DATEDIFF(s, '19700101', endDateTime), " + _
+	   "callsWaiting,convOldestContact,availableAgents,talkingAgents,callsAbandoned,OldestContact " + _
+         "from RtCSQsSummary where CSQName like '" + SQLQNAME + "';")
 
 HTTPCMD="GET " + HTTPFILE + " HTTP/1.0" + CRLF
 
@@ -146,42 +156,39 @@ if len(HTTPFILE) < 4 then
   app.terminate
 end if
 
+'
+' Connect to SQL database
+'
 create b as splash
   width=200:height=50:center:caption=" UCCX Wallboard Loader":onkeydown=cleanup
   create msg as label
-    top=0:left=10:width=b.width:height=b.height:caption="UCCX Wallboard 3.3: Trying " + ODBC_DSN1 + "..."
+    top=0:left=10:width=b.width:height=b.height:caption="UCCX Wallboard: Trying ODBC..."
   end create
 end create
 b.show
 
-db.connect(ODBC_DSN1,ODBC_USERNAME,ODBC_PASSWORD)
-DSNUSED=ODBC_DSN1
+db1.connect(ODBC_DSN1,ODBC_USERNAME,ODBC_PASSWORD)
+db2.connect(ODBC_DSN2,ODBC_USERNAME,ODBC_PASSWORD)
+
 ' this NEVER happens
-if db.error > 1 then 
-  if len(ODBC_DSN2) > 1 then
-    msg.caption="Failed. Trying " + ODBC_DSN2 + "...":msg.focus
-    db.close
-    db.connect(ODBC_DSN2,ODBC_USERNAME,ODBC_PASSWORD)
-    DSNUSED=ODBC_DSN2
-    if db.error > 1 then 
-      showmessage "Secondary ODBC connect error="+hex$(db.error)
-      goto cleanup
-    end if
-  else
-    showmessage "Primary ODBC connect failure and no secondary defined. Error="+hex$(db.error)
+if db1.error > 1 and db2.error > 1 then 
+    showmessage "Both ODBC data sources returned error 1="+hex$(db1.error)+" 2="+hex$(db2.error)
     goto cleanup
-  end if
 end if
 msg.caption="  Connected..."
 
+
+' panel resolution
 w=xres+(4*spc)
 w4=int(w/4)
 h=yres+(6*spc)
 h9=int(h/9)
 
+' font size
 if pfs=0 then pfs=2.8*h9
 if tfs=0 then tfs=h9/2
 
+' if this didn't have to run on Windows 98 we would have a thread
 create nothreads as timer
   repeated=1
   interval=ivl*1000
@@ -196,6 +203,7 @@ create blinker as timer
   enabled=0
 end create
 
+' enable blinker based on sla settings from config file
 if sla_waitqueue>0 or sla_waittime>0 then blinker.enabled=1
 
 create f as splash
@@ -230,110 +238,118 @@ create f as splash
     color=statbgcolor:textcolor=statfgcolor
     font=titlefont:style=statbar.style or &H1
     onmouseup=cleanup
-    caption=ORG + " Wallboard 3.3"
+    caption=ORG + " Wallboard 3.4"
   end create
+
+  '
+  ' Panel Map:
+  ' A B B C
+  ' D E F G
+  '
+  ' pt for oanel title, pc for panel content/cell
+  '
 
   '
   ' top row
   '
-  create cw1 as label
+  create pt_a as label
     top=h9:left=0:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=cw1.style or &H1
+    font=titlefont:style=pt_a.style or &H1
     caption="Wait Queue"
   end create
 
-  create cw2 as label
+  create pc_a as label
     top=2*h9:left=0:width=w4-spc:height=(3*h9)-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=cw2.style or &H1
+    font=bigfont:style=pc_a.style or &H1
     caption="??"
   end create
 
-  create wt1 as label
+  create pt_b as label
     top=h9:left=w4:width=2*w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=wt1.style or &H1
+    font=titlefont:style=pt_b.style or &H1
     caption="Oldest Caller Wait Time"
   end create
 
-  create wt2 as label
+  create pc_b as label
     top=2*h9:left=w4:width=(2*w4)-spc:height=(3*h9)-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=wt2.style or &H1
+    font=bigfont:style=pc_b.style or &H1
     caption="??:??"
   end create
 
-  create lc1 as label
+  create pt_c as label
     top=h9:left=3*w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=wt1.style or &H1
+    font=titlefont:style=pt_c.style or &H1
     caption="Lost Calls"
   end create
 
-  create lc2 as label
+  create pc_c as label
     top=2*h9:left=3*w4:width=w4-spc:height=(3*h9)-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=wt2.style or &H1
+    font=bigfont:style=pc_c.style or &H1
     caption="??"
   end create
 
   '
   ' bottom row
   '
-  create ar1 as label
+  create pt_d as label
     top=5*h9:left=0:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=ar1.style or &H1
+    font=titlefont:style=pt_d.style or &H1
     caption="Ready Agents"
   end create
 
-  create ar2 as label
+  create pc_d as label
     top=6*h9:left=0:width=w4-spc:height=(3*h9)-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=ar2.style or &H1
+    font=bigfont:style=pc_d.style or &H1
     caption="??"
   end create
 
-  create ta1 as label
+  create pt_e as label
     top=5*h9:left=w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=ta1.style or &H1
+    font=titlefont:style=pt_e.style or &H1
     caption="Talking Agents"
   end create
 
-  create ta2 as label
+  create pc_e as label
     top=6*h9:left=w4:width=w4-spc:height=(3*h9)-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=ta2.style or &H1
+    font=bigfont:style=pc_e.style or &H1
     caption="??"
   end create
 
-  create oc1 as label
+  create pt_f as label
     top=5*h9:left=2*w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=oc1.style or &H1
+    font=titlefont:style=pt_f.style or &H1
     caption="Outbound Calls"
   end create
 
-  create oc2 as label
+  create pc_f as label
     top=6*h9:left=2*w4:width=w4-spc:height=(3*h9)-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=oc2.style or &H1
+    font=bigfont:style=pc_f.style or &H1
     caption="??"
   end create
 
-  create ic1 as label
+  create pt_g as label
     top=5*h9:left=3*w4:width=w4-spc:height=h9-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=titlefont:style=ic1.style or &H1
+    font=titlefont:style=pt_g.style or &H1
     caption="Inbound Calls"
   end create
 
-  create ic2 as label
+  create pc_g as label
     top=6*h9:left=3*w4:width=w4-spc:height=(3*h9)-spc
     color=labelbgcolor:textcolor=labelfgcolor
-    font=bigfont:style=ic2.style or &H1
+    font=bigfont:style=pc_g.style or &H1
     caption="??"
   end create
 
@@ -347,75 +363,97 @@ else
   f.center
 end if
 b.visible=0
+showconsole
 f.showmodal
 
 '
 ' query the database and update screen
 '
 sub DoStuff
-  db.command(QUERYCMD)
+  print TIME$
+  db1.command(QUERYCMD)
+  db2.command(QUERYCMD)
 
-  if db.error then
-    db.freememory
-    db.close
-      if DSNUSED=ODBC_DSN1 then
-        if len(ODBC_DSN2) > 1 then
-          db.connect(ODBC_DSN2,ODBC_USERNAME,ODBC_PASSWORD)
-          DSNUSED=ODBC_DSN2
-        else
-          showmessage "Primary ODBC DSN failure and no secondary present. Error="+hex$(db.error)
-          goto cleanup
-        end if
-      else 
-        ' if we were on secondary, the primary must be defined..
-        db.connect(ODBC_DSN1,ODBC_USERNAME,ODBC_PASSWORD)
-        DSNUSED=ODBC_DSN1
-      end if
-      db.command(QUERYCMD)
-      if db.error then
-        showmessage "Both ODBC DSNs query error="+hex$(db.error)
-        goto cleanup
-      end if
-    end if
-
-  if db.row=100 then
-    showmessage "ODBC query returned no data"
-    goto cleanup
-  end if
-  
-  if db.fieldcount<>6 then 
-    showmessage "ODBC query returned wrong number of columns"
-    goto cleanup
+  ' obtain time of last update
+  ' error checking is useless but row<>100 is required
+  if not db1.error and db1.fieldcount=7 and db1.row<>100 then
+    db1_time=VAL(db1.rowvalue(1,1))
+    print "DB1=" + STR$(db1_time)
   end if
 
-  if showdsn=true then
+  if not db2.error and db2.fieldcount=7 and db2.row<>100 then
+    db2_time=VAL(db2.rowvalue(1,1))
+    print "DB2=" + STR$(db2_time)
+  end if
+
+  ' used data from the most up to date node
+  if db1_time>db2_time then
+    DSNUSED=ODBC_DSN1
+    cw=VAL(db1.rowvalue(2,1))
+    wt_str=right$(db1.rowvalue(3,1),5)
+    ar=VAL(db1.rowvalue(4,1))
+    ta=VAL(db1.rowvalue(5,1))
+    lc=VAL(db1.rowvalue(6,1))
+    wt=VAL(db1.rowvalue(7,1))
+    wtnew=0
+    wt_strnew=""
+
+    ' if multiqueue there should be more data!
+    while db1.row<>100
+      cw=cw+VAL(db1.rowvalue(2,1))
+      wt_strnew=right$(db1.rowvalue(3,1),5)    
+      dummy=VAL(db1.rowvalue(4,1))
+      dummy=VAL(db1.rowvalue(5,1))
+      lc=lc+VAL(db1.rowvalue(6,1))
+      wtnew=VAL(db1.rowvalue(7,1))
+      if wtnew > wt then 
+        wt=wtnew
+        wt_str=wt_strnew
+      end if
+    end while
+
+  elseif db2_time>db1_time then
+    DSNUSED=ODBC_DSN2
+    cw=VAL(db2.rowvalue(2,1))
+    wt_str=right$(db2.rowvalue(3,1),5)
+    ar=VAL(db2.rowvalue(4,1))
+    ta=VAL(db2.rowvalue(5,1))
+    lc=VAL(db2.rowvalue(6,1))
+    wt=VAL(db2.rowvalue(7,1))
+    wtnew=0
+    wt_strnew=""
+
+    ' if multiqueue there should be more data!
+    while db2.row<>100
+      cw=cw+VAL(db2.rowvalue(2,1))
+      wt_strnew=right$(db2.rowvalue(3,1),5)    
+      dummy=VAL(db2.rowvalue(4,1))
+      dummy=VAL(db2.rowvalue(5,1))
+      lc=lc+VAL(db2.rowvalue(6,1))
+      wtnew=VAL(db2.rowvalue(7,1))
+      if wtnew > wt then 
+        wt=wtnew
+        wt_str=wt_strnew
+      end if
+    end while
+  else
+    DSNUSED="ERROR"
+    cw=-1
+    wt_str="--"
+    ar=-1
+    ta=-1
+    lc=-1
+    wt=-1
+    wtnew=0
+    wt_strnew=""
+  end if
+
+  if showdsn=true or DSNUSED="ERROR" then
     stbc=ORG + "  " + QNAME + "  " + left$(TIME$, 5) + "  " + DSNUSED
   else
     stbc=ORG + "  " + QNAME + "  " + left$(TIME$, 5)
   end if
 
-  cw=VAL(db.rowvalue(1,1))
-  wt3=right$(db.rowvalue(2,1),5)
-  ar=VAL(db.rowvalue(3,1))
-  ta=VAL(db.rowvalue(4,1))
-  lc=VAL(db.rowvalue(5,1))
-  wt=val(db.rowvalue(6,1))
-  wtnew=0
-  wt3new=""
-
-  ' if multiqueue there should be more data!
-  while db.row<>100
-    cw=cw+VAL(db.rowvalue(1,1))
-    wt3new=right$(db.rowvalue(2,1),5)    
-    dummy=VAL(db.rowvalue(3,1))
-    dummy=VAL(db.rowvalue(4,1))
-    lc=lc+VAL(db.rowvalue(5,1))
-    wtnew=VAL(db.rowvalue(6,1))
-    if wtnew > wt then 
-      wt=wtnew
-      wt3=wt3new
-    end if
-  end while
 
   ' dirty little hack to get direct calls from the billing server
   sock=peer.s
@@ -443,28 +481,28 @@ sub DoStuff
 
   ' update only on a change to prevent flicker
   if stbc <> statbar.caption then statbar.caption=stbc
-  if str$(cw) <> cw2.caption then cw2.caption=str$(cw)
-  if wt3 <> wt2.caption then wt2.caption=wt3
-  if str$(ar) <> ar2.caption then ar2.caption=str$(ar)
+  if str$(cw) <> pc_a.caption then pc_a.caption=str$(cw)
+  if wt_str <> pc_b.caption then pc_b.caption=wt_str
+  if str$(ar) <> pc_d.caption then pc_d.caption=str$(ar)
 '  if str$(al) <> al2.caption then al2.caption=str$(al) not used
-  if str$(ta) <> ta2.caption then ta2.caption=str$(ta)
-  if str$(lc) <> lc2.caption then lc2.caption=str$(lc)
+  if str$(ta) <> pc_e.caption then pc_e.caption=str$(ta)
+  if str$(lc) <> pc_c.caption then pc_c.caption=str$(lc)
 
-  if inbound_calls <> ic2.caption then 
-    ic2.caption=inbound_calls
-    if len(ic2.caption) > 2 then 
-      ic2.font=notbigfont
+  if inbound_calls <> pc_g.caption then 
+    pc_g.caption=inbound_calls
+    if len(pc_g.caption) > 2 then 
+      pc_g.font=notbigfont
     else 
-      ic2.font=bigfont
+      pc_g.font=bigfont
     end if
   end if
 
-  if outbound_calls <> oc2.caption then 
-    oc2.caption=outbound_calls
-    if len(oc2.caption) > 2 then 
-      oc2.font=notbigfont
+  if outbound_calls <> pc_f.caption then 
+    pc_f.caption=outbound_calls
+    if len(pc_f.caption) > 2 then 
+      pc_f.font=notbigfont
     else 
-      oc2.font=bigfont
+      pc_f.font=bigfont
     end if
   end if
 
@@ -475,36 +513,37 @@ sub DoStuff
     if d.hour=sleepat and d.minute=0 then  ret=sendmessage(65535,274,61808,2)  
   end if
 
-  db.freememory
+  db1.freememory
+  db2.freememory
   doevents
 end sub
 
 sub DoBlink
   if sla_waitqueue>0 and cw>=sla_waitqueue then
-    if cw2.textcolor=labelfgcolor then
-      cw2.textcolor=blinkcolor
+    if pc_a.textcolor=labelfgcolor then
+      pc_a.textcolor=blinkcolor
     else
-      cw2.textcolor=labelfgcolor
+      pc_a.textcolor=labelfgcolor
     end if
-    cw2.repaint
+    pc_a.repaint
   else
-    if cw2.textcolor<>labelfgcolor then
-      cw2.textcolor=labelfgcolor
-      cw2.repaint
+    if pc_a.textcolor<>labelfgcolor then
+      pc_a.textcolor=labelfgcolor
+      pc_a.repaint
     end if
   end if
 
   if sla_waittime>0 and wt>=(sla_waittime*1000) then
-    if wt2.textcolor=labelfgcolor then
-      wt2.textcolor=blinkcolor
+    if pc_b.textcolor=labelfgcolor then
+      pc_b.textcolor=blinkcolor
     else
-      wt2.textcolor=labelfgcolor
+      pc_b.textcolor=labelfgcolor
     end if
-    wt2.repaint
+    pc_b.repaint
   else 
-    if wt2.textcolor<>labelfgcolor then
-      wt2.textcolor=labelfgcolor
-      wt2.repaint
+    if pc_b.textcolor<>labelfgcolor then
+      pc_b.textcolor=labelfgcolor
+      pc_b.repaint
     end if
   end if
   doevents
@@ -513,10 +552,11 @@ end sub
 
 cleanup:
 ret=sendmessage(65535,274,61808,-1) 
-db.close
+db2.close
+db2.close
 app.terminate
 
-PROP.FILEVERSION 3,3,0,0
+PROP.FILEVERSION 3,4,0,0
 PROP.PRODUCTVERSION 0,0,0,0
 PROP.FILEFLAGSMASK 0x0000003FL
 PROP.FILEFLAGS 0x0000000BL
@@ -529,8 +569,8 @@ PROP.BEGIN
 PROP.BLOCK "040904E4"
 PROP.BEGIN
 PROP.VALUE "Author","Antoni Sawicki"
-PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 3.3"
-PROP.VALUE "FileVersion", "3.2.0.0" 
+PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 3.4"
+PROP.VALUE "FileVersion", "3.4.0.0" 
 PROP.END  
 PROP.END  
 PROP.END  
