@@ -1,7 +1,7 @@
 '
 ' Cisco UCCX Wallboard 3.7.3
 ' Copyright (c) 2009-2016 by Antoni Sawicki <as@tenoware.com>
-'
+' 
 
 $APPTYPE GUI
 $TYPECHECK ON
