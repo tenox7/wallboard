@@ -1,6 +1,6 @@
 '
-' Cisco UCCX Wallboard 3.7.2BETA
-' Copyright (c) 2009-2013 by Antoni Sawicki <as@tenoware.com>
+' Cisco UCCX Wallboard 3.7.3
+' Copyright (c) 2009-2016 by Antoni Sawicki <as@tenoware.com>
 '
 
 $APPTYPE GUI
@@ -17,7 +17,7 @@ declare sub ShowCursor lib "user32" (bShow as long)
 declare sub logevent(myevent as string)
 declare function GetSystemMetrics lib "user32" (nIndex as long) as long
 
-defstr WBVER="3.7BETA"
+defstr WBVER="3.7.3"
 dim db1 as sqldata
 dim db2 as sqldata
 dim d as date
@@ -437,6 +437,7 @@ sub db1_worker()
       ' if multiqueue there should be more data!
       while db1.row<>100
         cline=db1.rowvalue(2,1): ptr=@cline: push ptr: gosub tval: pop db1_cw_m: db1_cw=db1_cw+db1_cw_m
+        db1_wt_strnew=db1.rowvalue(3,1)
         cline=db1.rowvalue(6,1): ptr=@cline: push ptr: gosub tval: pop db1_lc_m: db1_lc=db1_lc+db1_lc_m
         cline=db1.rowvalue(7,1): ptr=@cline: push ptr: gosub tval: pop db1_wtnew
         cline=db1.rowvalue(9,1): ptr=@cline: push ptr: gosub tval: pop db1_tc_m: db1_tc=db1_tc+db1_tc_m
@@ -575,8 +576,8 @@ msgcapture:
 return
 
 
-PROP.FILEVERSION 3,7,0,0
-PROP.PRODUCTVERSION 0,0,0,0
+PROP.FILEVERSION 3,7,3,0
+PROP.PRODUCTVERSION 3,7,3,0
 PROP.FILEFLAGSMASK 0x0000003FL
 PROP.FILEFLAGS 0x0000000BL
 PROP.FILEOS 0x00010001L
@@ -588,9 +589,9 @@ PROP.BEGIN
 PROP.BLOCK "040904E4"
 PROP.BEGIN
 PROP.VALUE "Author","Antoni Sawicki <as@tenoware.com>"
-PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 3.7.2BETA"
-PROP.VALUE "FileVersion", "3.7.2.0" 
-PROP.VALUE "LegalCopyright", "(c) 2009-2013 by Antoni Sawicki"
+PROP.VALUE "FileDescription", "Cisco UCCX Wallboard 3.7.3"
+PROP.VALUE "FileVersion", "3.7.3.0" 
+PROP.VALUE "LegalCopyright", "(c) 2009-2016 by Antoni Sawicki"
 PROP.VALUE "Additional Credits", "Aaron Harrison <aaro.harrison@ipcommute.co.uk>, Greg Markiewicz <gregm@bootstrap.ie>"
 PROP.END  
 PROP.END  
