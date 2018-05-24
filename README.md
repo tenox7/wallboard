@@ -31,11 +31,13 @@ If you are suing UCCX 8.x and above with Informix you need to use Wallboard 3.x
    
 6. Make sure that system clock is synchronized and Wallboard auto starts.
 
-## Support 
-If you are having issues setting it up please download [SqlDbx](http://www.sqldbx.com/personal_edition.htm) and connect to the same ODBC source as you defined in the wallboard config file. Make sure to use the same login credentials. If you are able to connect and browse RtCSQsSummary table then the problem is with Wallboard. If you cannot connect with SqlDbx then you have not configured UCCX or ODBC Driver correctly.
-
 A more detailed installation instructions document is available [here](https://github.com/tenox7/wallboard/raw/master/wallboard-2x-install.doc).
 
 
 ## Installation Instruction for UCCX 8.x / Informix / Wallboard 3.x 
 **TODO**
+
+
+## Support 
+If you are having issues setting it up please download [SqlDbx](http://www.sqldbx.com/personal_edition.htm) and connect to the same ODBC source as you defined in the wallboard config file. Make sure to use the same login credentials. If you are able to connect and browse RtCSQsSummary table then the problem is with Wallboard. If you cannot connect with SqlDbx then you have not configured UCCX or ODBC Driver correctly.
+
