@@ -1,6 +1,7 @@
 # Cisco IPCC / UCCX Full Screen Wallboard for Windows
-
 *AKA Tenox Wallboard*
+![alt text](https://raw.githubusercontent.com/tenox7/wallboard/master/wallboard.gif "Wallboard Screenshot")
+
 
 ## Intro
 There are several different wallboard applications for Cisco IPCC/UCCX, this one however has a number of unique features. Namely, instead of being an ASP web page, it's a stand alone Windows executable application that connects to a remote Contact Center server (or servers) via ODBC. It doesn't require .NET, Java or a web browser. It will run on a very old PC. It displays only one specific queue in a full screen mode. It's main purpose is to be run on an airport style display per each team. And it's free. 
@@ -33,7 +34,6 @@ Note these are for UCCX 7.x / Wallboard 2.x
 ## Support 
 If you are having issues setting it up please download [SqlDbx](http://www.sqldbx.com/personal_edition.htm) and connect to the same ODBC source as you defined in the wallboard config file. Make sure to use the same login credentials. If you are able to connect and browse RtCSQsSummary table then the problem is with Wallboard. If you cannot connect with SqlDbx then you have not configured UCCX or ODBC Driver correctly.
 
-A more detailed installation instruction document is available here.
+A more detailed installation instruction document is available [here](https://github.com/tenox7/wallboard/raw/master/wallboard-2x-install.doc).
 
 
-![alt text](https://raw.githubusercontent.com/tenox7/wallboard/master/wallboard.gif "Wallboard Screenshot")
