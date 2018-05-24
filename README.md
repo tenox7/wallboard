@@ -17,8 +17,7 @@ If you are using UCCX 7.x with MS-SQL you need to use Wallboard 2.x
 
 If you are suing UCCX 8.x and above with Informix you need to use Wallboard 3.x
 
-## Installation Instruction
-Note these are for UCCX 7.x / Wallboard 2.x
+## Installation Instruction for UCCX 7.x / MS-SQL / Wallboard 2.x
 
 1. You need to enable hybrid / mixed mode on the UCCX MS-SQL server. Yes it is supported by Cisco, however if you use the eporting tool you will need to set `AUTH=1` in `hrcConfig.ini` file.
 
@@ -35,6 +34,8 @@ Note these are for UCCX 7.x / Wallboard 2.x
 ## Support 
 If you are having issues setting it up please download [SqlDbx](http://www.sqldbx.com/personal_edition.htm) and connect to the same ODBC source as you defined in the wallboard config file. Make sure to use the same login credentials. If you are able to connect and browse RtCSQsSummary table then the problem is with Wallboard. If you cannot connect with SqlDbx then you have not configured UCCX or ODBC Driver correctly.
 
-A more detailed installation instruction document is available [here](https://github.com/tenox7/wallboard/raw/master/wallboard-2x-install.doc).
+A more detailed installation instructions document is available [here](https://github.com/tenox7/wallboard/raw/master/wallboard-2x-install.doc).
 
 
+## Installation Instruction for UCCX 8.x / Informix / Wallboard 3.x 
+**TODO**
